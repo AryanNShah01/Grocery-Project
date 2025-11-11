@@ -1,23 +1,73 @@
-import { CreditCard, Smartphone, Wallet, ArrowLeft, Shield } from 'lucide-react';
+import { CreditCard, Smartphone, Wallet, ArrowLeft, Shield, Loader } from 'lucide-react';
 import { useState } from 'react';
 import type { CartItem } from '../App';
 
 interface PaymentPageProps {
   cart: CartItem[];
-  onPaymentComplete: (paymentStatus: string) => void;
+  onPaymentComplete: (orderId: string, paymentStatus: string) => void;
   onBack: () => void;
+  currentUser?: any;
 }
 
-export function PaymentPage({ cart, onPaymentComplete, onBack }: PaymentPageProps) {
+export function PaymentPage({ cart, onPaymentComplete, onBack, currentUser }: PaymentPageProps) {
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'upi' | 'cod'>('upi');
+  const [processing, setProcessing] = useState(false);
+
+  const API_BASE = 'http://localhost:5000';
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const discount = cart.reduce((sum, item) => sum + (item.price * item.discount / 100) * item.quantity, 0);
   const total = subtotal - discount;
 
-  const handlePayment = (e: React.FormEvent) => {
+  const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    onPaymentComplete('Completed');
+    
+    if (!currentUser) {
+      alert('Please login to complete your order');
+      return;
+    }
+
+    setProcessing(true);
+
+    try {
+      // ✅ CREATE ORDER IN BACKEND
+      const orderResponse = await fetch(`${API_BASE}/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          items: cart.map(item => ({
+            id: item.id,
+            quantity: item.quantity,
+            price: item.price,
+            discount: item.discount
+          })),
+          total: total,
+          status: paymentMethod === 'cod' ? 'pending' : 'paid'
+        }),
+      });
+
+      const orderData = await orderResponse.json();
+
+      if (!orderResponse.ok) {
+        throw new Error(orderData.error || 'Failed to create order');
+      }
+
+      console.log('✅ Order created successfully:', orderData);
+      
+      // Simulate payment processing
+      setTimeout(() => {
+        setProcessing(false);
+        onPaymentComplete(orderData.orderId, 'Completed');
+      }, 2000);
+
+    } catch (error) {
+      console.error('Payment error:', error);
+      alert('Payment failed. Please try again.');
+      setProcessing(false);
+    }
   };
 
   return (
@@ -25,7 +75,8 @@ export function PaymentPage({ cart, onPaymentComplete, onBack }: PaymentPageProp
       <div className="max-w-5xl mx-auto px-4">
         <button 
           onClick={onBack}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6"
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-6 transition-colors"
+          disabled={processing}
         >
           <ArrowLeft className="w-5 h-5" />
           Back to Cart
@@ -42,11 +93,12 @@ export function PaymentPage({ cart, onPaymentComplete, onBack }: PaymentPageProp
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <button
                   onClick={() => setPaymentMethod('card')}
+                  disabled={processing}
                   className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition ${
                     paymentMethod === 'card' 
                       ? 'border-green-600 bg-green-50' 
                       : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                  } ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <CreditCard className={`w-8 h-8 ${paymentMethod === 'card' ? 'text-green-600' : 'text-gray-600'}`} />
                   <span className={`text-sm ${paymentMethod === 'card' ? 'text-green-600' : 'text-gray-700'}`}>
@@ -56,11 +108,12 @@ export function PaymentPage({ cart, onPaymentComplete, onBack }: PaymentPageProp
 
                 <button
                   onClick={() => setPaymentMethod('upi')}
+                  disabled={processing}
                   className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition ${
                     paymentMethod === 'upi' 
                       ? 'border-green-600 bg-green-50' 
                       : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                  } ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Smartphone className={`w-8 h-8 ${paymentMethod === 'upi' ? 'text-green-600' : 'text-gray-600'}`} />
                   <span className={`text-sm ${paymentMethod === 'upi' ? 'text-green-600' : 'text-gray-700'}`}>
@@ -70,11 +123,12 @@ export function PaymentPage({ cart, onPaymentComplete, onBack }: PaymentPageProp
 
                 <button
                   onClick={() => setPaymentMethod('cod')}
+                  disabled={processing}
                   className={`p-4 border-2 rounded-lg flex flex-col items-center gap-2 transition ${
                     paymentMethod === 'cod' 
                       ? 'border-green-600 bg-green-50' 
                       : 'border-gray-200 hover:border-gray-300'
-                  }`}
+                  } ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Wallet className={`w-8 h-8 ${paymentMethod === 'cod' ? 'text-green-600' : 'text-gray-600'}`} />
                   <span className={`text-sm ${paymentMethod === 'cod' ? 'text-green-600' : 'text-gray-700'}`}>
@@ -93,6 +147,7 @@ export function PaymentPage({ cart, onPaymentComplete, onBack }: PaymentPageProp
                         placeholder="1234 5678 9012 3456"
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                         required
+                        disabled={processing}
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -103,6 +158,7 @@ export function PaymentPage({ cart, onPaymentComplete, onBack }: PaymentPageProp
                           placeholder="MM/YY"
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                           required
+                          disabled={processing}
                         />
                       </div>
                       <div>
@@ -112,6 +168,7 @@ export function PaymentPage({ cart, onPaymentComplete, onBack }: PaymentPageProp
                           placeholder="123"
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                           required
+                          disabled={processing}
                         />
                       </div>
                     </div>
@@ -122,6 +179,7 @@ export function PaymentPage({ cart, onPaymentComplete, onBack }: PaymentPageProp
                         placeholder="John Doe"
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                         required
+                        disabled={processing}
                       />
                     </div>
                   </div>
@@ -136,6 +194,7 @@ export function PaymentPage({ cart, onPaymentComplete, onBack }: PaymentPageProp
                         placeholder="yourname@paytm / @phonepe / @gpay"
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                         required
+                        disabled={processing}
                       />
                     </div>
                     <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
@@ -166,10 +225,20 @@ export function PaymentPage({ cart, onPaymentComplete, onBack }: PaymentPageProp
 
                 <button 
                   type="submit"
-                  className="w-full mt-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
+                  disabled={processing || cart.length === 0}
+                  className="w-full mt-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Shield className="w-5 h-5" />
-                  {paymentMethod === 'cod' ? 'Place Order' : `Pay ₹${total.toFixed(2)}`}
+                  {processing ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="w-5 h-5" />
+                      {paymentMethod === 'cod' ? 'Place Order' : `Pay ₹${total.toFixed(2)}`}
+                    </>
+                  )}
                 </button>
               </form>
             </div>
@@ -216,7 +285,7 @@ export function PaymentPage({ cart, onPaymentComplete, onBack }: PaymentPageProp
                   <span className="text-gray-600">Delivery</span>
                   <span className="text-green-600">Free</span>
                 </div>
-                <div className="border-t pt-2 flex justify-between">
+                <div className="border-t pt-2 flex justify-between font-semibold">
                   <span className="text-gray-900">Total</span>
                   <span className="text-green-600">₹{total.toFixed(2)}</span>
                 </div>

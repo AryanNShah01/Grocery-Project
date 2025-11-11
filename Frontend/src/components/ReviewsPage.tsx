@@ -1,16 +1,15 @@
-import { Star, ThumbsUp, MessageSquare } from 'lucide-react';
+import { Star, ThumbsUp, MessageSquare, Loader } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import type { Product } from '../App';
 
 interface Review {
   id: number;
-  productId: string;
-  productName: string;
+  product_id: string;
   author: string;
   rating: number;
-  date: string;
   comment: string;
-  helpful: number;
+  date: string;
+  productName: string;
 }
 
 export function ReviewsPage() {
@@ -20,12 +19,15 @@ export function ReviewsPage() {
   const [rating, setRating] = useState(5);
   const [review, setReview] = useState('');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  const API_BASE = 'http://localhost:5000';
 
   // ✅ FETCH REAL PRODUCTS FROM BACKEND
   useEffect(() => {
     async function fetchData() {
       try {
-        const productsResponse = await fetch('http://localhost:5000/products');
+        const productsResponse = await fetch(`${API_BASE}/products`);
         const productsData = await productsResponse.json();
         setProducts(productsData);
         
@@ -35,7 +37,7 @@ export function ReviewsPage() {
 
         // Fetch reviews for all products
         const reviewsPromises = productsData.map((product: Product) => 
-          fetch(`http://localhost:5000/reviews/${product.id}`).then(res => res.json())
+          fetch(`${API_BASE}/reviews/${product.id}`).then(res => res.json())
         );
         
         const reviewsResults = await Promise.all(reviewsPromises);
@@ -60,46 +62,60 @@ export function ReviewsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!review.trim()) return;
+    if (!review.trim() || !selectedProduct) return;
 
+    setSubmitting(true);
     try {
-      // ✅ SUBMIT REVIEW TO BACKEND
-      const response = await fetch(`http://localhost:5000/reviews/${selectedProduct}`, {
+      // ✅ SUBMIT REVIEW TO BACKEND - CORRECTED ENDPOINT
+      const response = await fetch(`${API_BASE}/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          author: 'Current User', // You can replace this with actual user data
+          productId: selectedProduct,
+          author: 'Current User', // Replace with actual user data from context
           rating: rating,
           comment: review
         })
       });
 
-      if (response.ok) {
-        // Refresh reviews
-        const reviewsResponse = await fetch(`http://localhost:5000/reviews/${selectedProduct}`);
-        const newReviews = await reviewsResponse.json();
-        
-        // Update reviews state with new review
-        const product = products.find(p => p.id === selectedProduct);
-        const reviewsWithProductNames = newReviews.map((rev: any) => ({
-          ...rev,
-          productName: product?.name || 'Unknown Product'
-        }));
-        
-        setReviews(prev => [...prev, ...reviewsWithProductNames]);
-        setReview('');
-        setRating(5);
-        alert('Review submitted successfully!');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to submit review');
       }
+
+      // Refresh reviews for the selected product
+      const reviewsResponse = await fetch(`${API_BASE}/reviews/${selectedProduct}`);
+      const newReviews = await reviewsResponse.json();
+      
+      // Update reviews state with new review
+      const product = products.find(p => p.id === selectedProduct);
+      const newReviewWithProductName = {
+        ...data,
+        productName: product?.name || 'Unknown Product'
+      };
+      
+      setReviews(prev => [newReviewWithProductName, ...prev]);
+      setReview('');
+      setRating(5);
+      
+      console.log('✅ Review submitted successfully:', data);
+      
     } catch (error) {
       console.error('Error submitting review:', error);
+      alert('Failed to submit review. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>Loading reviews from database...</p>
+        <div className="flex items-center gap-2">
+          <Loader className="w-5 h-5 animate-spin" />
+          <p>Loading reviews from database...</p>
+        </div>
       </div>
     );
   }
@@ -125,7 +141,9 @@ export function ReviewsPage() {
                     value={selectedProduct}
                     onChange={(e) => setSelectedProduct(e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                    required
                   >
+                    <option value="">Choose a product</option>
                     {products.map(product => (
                       <option key={product.id} value={product.id}>
                         {product.name}
@@ -142,7 +160,7 @@ export function ReviewsPage() {
                         key={star}
                         type="button"
                         onClick={() => setRating(star)}
-                        className="focus:outline-none"
+                        className="focus:outline-none transition-transform hover:scale-110"
                       >
                         <Star 
                           className={`w-8 h-8 transition ${
@@ -165,15 +183,26 @@ export function ReviewsPage() {
                     rows={5}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
                     required
+                    disabled={submitting}
                   />
                 </div>
 
                 <button 
                   type="submit"
-                  className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2"
+                  disabled={submitting || !selectedProduct}
+                  className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <MessageSquare className="w-5 h-5" />
-                  Submit Review
+                  {submitting ? (
+                    <>
+                      <Loader className="w-5 h-5 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare className="w-5 h-5" />
+                      Submit Review
+                    </>
+                  )}
                 </button>
               </form>
             </div>
@@ -190,15 +219,16 @@ export function ReviewsPage() {
               <div className="space-y-6">
                 {reviews.length === 0 ? (
                   <div className="text-center py-8">
+                    <MessageSquare className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500">No reviews yet. Be the first to review!</p>
                   </div>
                 ) : (
                   reviews.map(review => (
-                    <div key={review.id} className="border-b pb-6 last:border-b-0">
+                    <div key={review.id} className="border-b border-gray-200 pb-6 last:border-b-0">
                       <div className="flex items-start justify-between mb-3">
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-gray-900">{review.author}</span>
+                            <span className="font-semibold text-gray-900">{review.author}</span>
                             <div className="flex items-center">
                               {[...Array(5)].map((_, i) => (
                                 <Star 
@@ -212,12 +242,14 @@ export function ReviewsPage() {
                               ))}
                             </div>
                           </div>
-                          <p className="text-sm text-gray-500">{new Date(review.date).toLocaleDateString()}</p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(review.date).toLocaleDateString('en-IN')}
+                          </p>
                         </div>
                       </div>
 
                       <div className="mb-2">
-                        <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm mb-2">
+                        <span className="inline-block px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
                           {review.productName}
                         </span>
                       </div>
@@ -225,9 +257,9 @@ export function ReviewsPage() {
                       <p className="text-gray-700 mb-3">{review.comment}</p>
 
                       <div className="flex items-center gap-4">
-                        <button className="flex items-center gap-1 text-gray-500 hover:text-green-600">
+                        <button className="flex items-center gap-1 text-gray-500 hover:text-green-600 transition-colors">
                           <ThumbsUp className="w-4 h-4" />
-                          <span className="text-sm">Helpful ({review.helpful || 0})</span>
+                          <span className="text-sm">Helpful (0)</span>
                         </button>
                       </div>
                     </div>
@@ -252,7 +284,7 @@ export function ReviewsPage() {
                       </div>
                       <div className="flex-1 bg-gray-200 rounded-full h-2">
                         <div 
-                          className="bg-yellow-400 h-2 rounded-full transition-all"
+                          className="bg-yellow-400 h-2 rounded-full transition-all duration-500"
                           style={{ width: `${percentage}%` }}
                         />
                       </div>
@@ -261,6 +293,17 @@ export function ReviewsPage() {
                   );
                 })}
               </div>
+              
+              {reviews.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-semibold">Average Rating</span>
+                    <span className="text-2xl text-yellow-400">
+                      {(reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

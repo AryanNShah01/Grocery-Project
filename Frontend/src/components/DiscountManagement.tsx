@@ -1,4 +1,4 @@
-import { Plus, Edit2, Trash2, AlertCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, AlertCircle, Loader } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import type { Product } from '../App';
 
@@ -15,12 +15,15 @@ export function DiscountManagement() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+
+  const API_BASE = 'http://localhost:5000';
 
   // ✅ FETCH REAL DATA FROM BACKEND
   useEffect(() => {
     async function fetchProducts() {
       try {
-        const response = await fetch('http://localhost:5000/products');
+        const response = await fetch(`${API_BASE}/products`);
         const data = await response.json();
         setProducts(data);
       } catch (error) {
@@ -32,22 +35,44 @@ export function DiscountManagement() {
     fetchProducts();
   }, []);
 
+  // Update product discount
+  const updateProductDiscount = async (productId: string, discountPercent: number) => {
+    setUpdating(true);
+    try {
+      // Since we don't have a specific discount endpoint, we can update the product
+      // This would need to be implemented in your backend
+      console.log(`Updating discount for product ${productId} to ${discountPercent}%`);
+      
+      // For now, we'll just show a message
+      alert(`Discount update functionality would be implemented here for product ${productId}`);
+      
+    } catch (error) {
+      console.error('Error updating discount:', error);
+      alert('Failed to update discount');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   // Create discount offers from REAL products with discounts
   const discountOffers: DiscountOffer[] = products
-    .filter(p => p.discount > 0)
+    .filter(p => Number(p.discount) > 0)
     .map(p => ({
       id: `DO-${p.id}`,
       productId: p.id,
       productName: p.name,
       quantity: p.stock,
-      discountPercent: p.discount,
+      discountPercent: Number(p.discount),
       validTill: p.expiryDate
     }));
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p>Loading products from database...</p>
+        <div className="flex items-center gap-2">
+          <Loader className="w-5 h-5 animate-spin" />
+          <p>Loading products from database...</p>
+        </div>
       </div>
     );
   }
@@ -62,7 +87,8 @@ export function DiscountManagement() {
           </div>
           <button 
             onClick={() => setShowAddForm(!showAddForm)}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+            disabled={updating}
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-50"
           >
             <Plus className="w-5 h-5" />
             Add Discount Offer
@@ -88,7 +114,10 @@ export function DiscountManagement() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm mb-2 text-gray-700">Product</label>
-                <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                <select 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  disabled={updating}
+                >
                   <option value="">Select a product</option>
                   {products.map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
@@ -101,6 +130,7 @@ export function DiscountManagement() {
                   type="number" 
                   placeholder="e.g., 25"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  disabled={updating}
                 />
               </div>
               <div>
@@ -109,6 +139,7 @@ export function DiscountManagement() {
                   type="number" 
                   placeholder="e.g., 50"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  disabled={updating}
                 />
               </div>
               <div>
@@ -116,16 +147,22 @@ export function DiscountManagement() {
                 <input 
                   type="date" 
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  disabled={updating}
                 />
               </div>
             </div>
             <div className="flex gap-3 mt-4">
-              <button className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+              <button 
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+                disabled={updating}
+              >
+                {updating && <Loader className="w-4 h-4 animate-spin" />}
                 Create Offer
               </button>
               <button 
                 onClick={() => setShowAddForm(false)}
-                className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                disabled={updating}
               >
                 Cancel
               </button>
@@ -164,7 +201,7 @@ export function DiscountManagement() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        {new Date(offer.validTill).toLocaleDateString()}
+                        {new Date(offer.validTill).toLocaleDateString('en-IN')}
                         {daysLeft <= 3 && (
                           <span className="ml-2 text-orange-600">({daysLeft}d left)</span>
                         )}
@@ -180,10 +217,17 @@ export function DiscountManagement() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
-                          <button className="p-2 text-blue-600 hover:bg-blue-50 rounded">
+                          <button 
+                            onClick={() => updateProductDiscount(offer.productId, offer.discountPercent)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded disabled:opacity-50"
+                            disabled={updating}
+                          >
                             <Edit2 className="w-4 h-4" />
                           </button>
-                          <button className="p-2 text-red-600 hover:bg-red-50 rounded">
+                          <button 
+                            className="p-2 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                            disabled={updating}
+                          >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -198,6 +242,7 @@ export function DiscountManagement() {
 
         {discountOffers.length === 0 && (
           <div className="bg-white rounded-lg p-12 text-center">
+            <AlertCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500">No active discount offers. Create your first offer to get started.</p>
           </div>
         )}
