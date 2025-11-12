@@ -90,59 +90,21 @@ export function StoreOwnerDashboard() {
 
   const fetchDashboardData = async () => {
     try {
+      console.log("📊 Fetching REAL analytics data...");
       const response = await fetch(
         `${API_BASE}/analytics?timeRange=${timeRange}`
       );
-      if (!response.ok) throw new Error("Failed to fetch analytics");
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch analytics: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log("✅ REAL analytics data received:", data);
       setAnalytics(data);
     } catch (error) {
-      console.error("Error fetching analytics:", error);
-      // Fallback to mock data based on your actual database
-      const mockAnalytics: AnalyticsData = {
-        sales: {
-          labels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-          data: [278.25, 0, 0, 0, 0, 0, 0], // Based on your actual order data
-        },
-        categories: {
-          labels: ["Dairy", "Bakery", "Vegetables", "Fruits", "Grains"],
-          data: [63, 25, 12, 0, 0], // Based on your order_items
-        },
-        revenue: {
-          current: 278.25, // Your actual order total
-          previous: 200.0,
-          growth: 39.1,
-        },
-        inventory: {
-          total: 12, // Your 12 products
-          lowStock: 2, // Products with stock < 10
-          expiring: 3, // Products expiring in next 7 days
-        },
-        topProducts: [
-          {
-            id: "8",
-            name: "Paneer 200g",
-            sales: 2,
-            revenue: 126.0, // 2 * (90 - 30% discount)
-            stock: 30,
-          },
-          {
-            id: "4",
-            name: "Whole Wheat Bread",
-            sales: 3,
-            revenue: 68.25, // 3 * (35 - 35% discount)
-            stock: 40,
-          },
-          {
-            id: "12",
-            name: "Yogurt 500g",
-            sales: 3,
-            revenue: 84.0, // 3 * (40 - 30% discount)
-            stock: 25,
-          },
-        ],
-      };
-      setAnalytics(mockAnalytics);
+      console.error("❌ Error fetching analytics:", error);
+      setAnalytics(null);
     } finally {
       setLoading(false);
     }
@@ -150,29 +112,19 @@ export function StoreOwnerDashboard() {
 
   const fetchProducts = async () => {
     try {
+      console.log("📦 Fetching REAL products data...");
       const response = await fetch(`${API_BASE}/products`);
-      if (!response.ok) throw new Error("Failed to fetch products");
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch products: ${response.status}`);
+      }
+      
       const data = await response.json();
+      console.log("✅ REAL products data received:", data);
       setProducts(data);
     } catch (error) {
-      console.error("Error fetching products:", error);
-      // Use your actual product data from database
-      const mockProducts: Product[] = [
-        {
-          id: "1",
-          name: "Fresh Tomatoes",
-          category: "Vegetables",
-          price: 40.0,
-          stock: 100,
-          discount: 15.0,
-          expiryDate: "2025-11-17",
-          rating: 4.3,
-          image_url:
-            "https://images.unsplash.com/photo-1561136594-7f68413baa99?w=400&auto=format&fit=crop",
-        },
-        // Add more products from your database...
-      ];
-      setProducts(mockProducts);
+      console.error("❌ Error fetching products:", error);
+      setProducts([]);
     }
   };
 
@@ -274,7 +226,28 @@ export function StoreOwnerDashboard() {
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading real store data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!analytics) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Failed to Load Data</h2>
+          <p className="text-gray-600 mb-4">Could not connect to the analytics server.</p>
+          <button
+            onClick={fetchDashboardData}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -290,6 +263,9 @@ export function StoreOwnerDashboard() {
             </h1>
             <p className="text-gray-600 mt-2">
               Real-time insights from your grocery database
+            </p>
+            <p className="text-sm text-green-600 mt-1">
+              ✅ Connected to live database
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -417,8 +393,6 @@ export function StoreOwnerDashboard() {
             {/* Proper Bar Chart Layout */}
             <div className="mt-8 p-4">
               <div className="flex items-end justify-between h-48">
-                {" "}
-                {/* Fixed height for chart area */}
                 {analytics?.sales?.data && analytics.sales.data.length > 0 ? (
                   analytics.sales.data.map((value, index) => {
                     const numericValue = Number(value) || 0;

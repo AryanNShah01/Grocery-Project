@@ -63,34 +63,27 @@ export default function App() {
 
   const API_BASE = "http://localhost:5000";
 
-  // ✅ LOAD USER SESSION ON APP START
-  useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        // Check if user is logged in from localStorage
-        const savedUser = localStorage.getItem("user");
-        const savedRole = localStorage.getItem("userRole");
-
-        if (savedUser && savedRole) {
-          const user = JSON.parse(savedUser);
-          setCurrentUser(user);
-          setUserRole(savedRole as UserRole);
-        }
-
-        // Load cart from localStorage
-        const savedCart = localStorage.getItem("cart");
-        if (savedCart) {
-          setCart(JSON.parse(savedCart));
-        }
-      } catch (error) {
-        console.error("Error initializing app:", error);
-      } finally {
-        setLoading(false);
+// ✅ LOAD USER SESSION ON APP START - BUT LOGOUT ON REFRESH
+useEffect(() => {
+  const initializeApp = async () => {
+    try {
+      // ✅ INTENTIONALLY DON'T load user from localStorage on refresh
+      // This will log everyone out when page refreshes
+      
+      // Only load cart from localStorage (optional - remove if you want empty cart too)
+      const savedCart = localStorage.getItem("cart");
+      if (savedCart) {
+        setCart(JSON.parse(savedCart));
       }
-    };
+    } catch (error) {
+      console.error("Error initializing app:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    initializeApp();
-  }, []);
+  initializeApp();
+}, []);
 
   // ✅ SAVE CART TO LOCALSTORAGE WHENEVER IT CHANGES
   useEffect(() => {

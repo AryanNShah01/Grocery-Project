@@ -5,8 +5,6 @@ const analyticsRoutes = require('./routes/analyticsRoutes');
 const productRoutes = require('./routes/productRoutes');
 const app = express();
 
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/products', productRoutes);
 app.use(cors());
 app.use(express.json());
 
@@ -44,7 +42,8 @@ const checkDbConnection = (res) => {
 };
 
 // ==================== ROUTES ====================
-
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/products', productRoutes);
 // ✅ HEALTH CHECK
 app.get("/test", (req, res) => {
   res.json({ 
