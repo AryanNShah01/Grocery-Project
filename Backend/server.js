@@ -7,7 +7,8 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
-
+// Add this line to serve uploaded images
+app.use('/uploads', express.static('uploads'));
 console.log("🔄 Starting server...");
 
 // Database configuration

@@ -12,6 +12,7 @@ import {
   Star,
   Clock,
   TrendingDown,
+  Upload,
 } from "lucide-react";
 
 interface AnalyticsData {
@@ -62,6 +63,7 @@ interface NewProductData {
   discount: number;
   expiryDate: string;
   description: string;
+  image_url: string;
 }
 
 export function StoreOwnerDashboard() {
@@ -78,8 +80,10 @@ export function StoreOwnerDashboard() {
     discount: 0,
     expiryDate: "",
     description: "",
+    image_url: "",
   });
   const [addingProduct, setAddingProduct] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   const API_BASE = "http://localhost:5000/api";
 
@@ -90,7 +94,6 @@ export function StoreOwnerDashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      console.log("📊 Fetching REAL analytics data...");
       const response = await fetch(
         `${API_BASE}/analytics?timeRange=${timeRange}`
       );
@@ -100,10 +103,9 @@ export function StoreOwnerDashboard() {
       }
       
       const data = await response.json();
-      console.log("✅ REAL analytics data received:", data);
       setAnalytics(data);
     } catch (error) {
-      console.error("❌ Error fetching analytics:", error);
+      console.error("Error fetching analytics:", error);
       setAnalytics(null);
     } finally {
       setLoading(false);
@@ -112,7 +114,6 @@ export function StoreOwnerDashboard() {
 
   const fetchProducts = async () => {
     try {
-      console.log("📦 Fetching REAL products data...");
       const response = await fetch(`${API_BASE}/products`);
       
       if (!response.ok) {
@@ -120,51 +121,100 @@ export function StoreOwnerDashboard() {
       }
       
       const data = await response.json();
-      console.log("✅ REAL products data received:", data);
       setProducts(data);
     } catch (error) {
-      console.error("❌ Error fetching products:", error);
+      console.error("Error fetching products:", error);
       setProducts([]);
     }
   };
 
-  const handleAddProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAddingProduct(true);
+  const calculateDiscount = (expiryDate: string): number => {
+    if (!expiryDate) return 0;
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    const timeDiff = expiry.getTime() - today.getTime();
+    const daysUntilExpiry = Math.ceil(timeDiff / (1000 * 3600 * 24));
+    
+    if (daysUntilExpiry <= 3) return 30;
+    else if (daysUntilExpiry <= 7) return 20;
+    else if (daysUntilExpiry <= 14) return 10;
+    return 0;
+  };
 
-    try {
-      const response = await fetch(`${API_BASE}/products`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newProduct),
-      });
-
-      if (!response.ok) throw new Error("Failed to add product");
-
-      const addedProduct = await response.json();
-      setProducts((prev) => [...prev, addedProduct]);
-      setShowAddProduct(false);
-      setNewProduct({
-        name: "",
-        category: "Vegetables",
-        price: 0,
-        stock: 0,
-        discount: 0,
-        expiryDate: "",
-        description: "",
-      });
-
-      // Refresh analytics
-      fetchDashboardData();
-    } catch (error) {
-      console.error("Error adding product:", error);
-      alert("Failed to add product. Please try again.");
-    } finally {
-      setAddingProduct(false);
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
     }
   };
+
+  const handleAddProduct = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setAddingProduct(true);
+
+  try {
+    const calculatedDiscount = calculateDiscount(newProduct.expiryDate);
+    
+    const productData = {
+      name: newProduct.name,
+      category: newProduct.category,
+      price: newProduct.price,
+      stock: newProduct.stock,
+      discount: calculatedDiscount,
+      expiryDate: newProduct.expiryDate,
+      description: newProduct.description
+    };
+
+    console.log("📤 Sending product data:", productData);
+
+    const response = await fetch(`${API_BASE}/products`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(productData),
+    });
+
+    console.log("📥 Response status:", response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+
+    const addedProduct = await response.json();
+    console.log("✅ Product added successfully:", addedProduct);
+    
+    // Update products list
+    setProducts((prev) => [...prev, addedProduct]);
+    
+    // Reset form and close modal
+    setShowAddProduct(false);
+    setNewProduct({
+      name: "",
+      category: "Vegetables",
+      price: 0,
+      stock: 0,
+      discount: 0,
+      expiryDate: "",
+      description: "",
+      image_url: "",
+    });
+    setImageFile(null);
+
+    // Refresh data
+    await fetchDashboardData();
+    await fetchProducts();
+    
+    alert("✅ Product added successfully!");
+
+  } catch (error) {
+    console.error("❌ Error adding product:", error);
+    alert(`Failed to add product: ${error.message}`);
+  } finally {
+    setAddingProduct(false);
+  }
+};
 
   const handleInputChange = (
     e: React.ChangeEvent<
@@ -172,13 +222,20 @@ export function StoreOwnerDashboard() {
     >
   ) => {
     const { name, value } = e.target;
-    setNewProduct((prev) => ({
-      ...prev,
+    
+    const updatedProduct = {
+      ...newProduct,
       [name]:
         name === "price" || name === "stock" || name === "discount"
           ? Number(value)
           : value,
-    }));
+    };
+
+    if (name === "expiryDate" && value) {
+      updatedProduct.discount = calculateDiscount(value);
+    }
+
+    setNewProduct(updatedProduct);
   };
 
   const exportReport = async () => {
@@ -201,7 +258,6 @@ export function StoreOwnerDashboard() {
         a.click();
         window.URL.revokeObjectURL(url);
       } else {
-        // Fallback - generate client-side report
         const reportData = {
           analytics,
           products,
@@ -681,21 +737,6 @@ export function StoreOwnerDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Discount (%)
-                    </label>
-                    <input
-                      type="number"
-                      name="discount"
-                      value={newProduct.discount}
-                      onChange={handleInputChange}
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Expiry Date
                     </label>
                     <input
@@ -706,6 +747,37 @@ export function StoreOwnerDashboard() {
                       required
                       className="w-full px-3 py-2 bg-white border border-gray-300 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Auto Discount
+                    </label>
+                    <input
+                      type="text"
+                      value={`${newProduct.discount}%`}
+                      disabled
+                      className="w-full px-3 py-2 bg-gray-100 border border-gray-300 text-gray-900 rounded-lg cursor-not-allowed"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Based on expiry date
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Product Image
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex-1 flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 text-gray-900 rounded-lg hover:bg-gray-50 cursor-pointer">
+                      <Upload className="w-4 h-4" />
+                      <span>{imageFile ? imageFile.name : "Choose image..."}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
                 </div>
                 <div>
@@ -731,7 +803,7 @@ export function StoreOwnerDashboard() {
                   <button
                     type="submit"
                     disabled={addingProduct}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {addingProduct ? "Adding..." : "Add Product"}
                   </button>
